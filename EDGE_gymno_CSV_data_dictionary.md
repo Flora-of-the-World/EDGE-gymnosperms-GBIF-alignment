@@ -107,12 +107,31 @@ Populated only when `EDGE.List = y` (i.e., the row corresponds to one of the 258
 |---|---|---|
 | `Class` | 2024 list | Higher rank (`GINKGOOPSIDA`, `PINOPSIDA`, `CYCADOPSIDA`). |
 | `common_name` | 2024 `Common.name` | Vernacular name (English-leaning, occasionally French/Spanish). May be empty. |
-| `edge2.med` | 2024 `EDGE.median` | EDGE2 median score (Gumbs et al. 2023). Units: millions of years of potential evolutionary history lost. *Ginkgo biloba* has the maximum at 151.02 Myr. |
+| `ed2.med` | 2024 `ED.median` | Evolutionary Distinctiveness (Fair Proportion, median, Myr) **recomputed under the EDGE2 phylogeny.** Same metric definition as the 2018 `ed.med` but different underlying tree. **Almost never equal to `ed.med`** — see "ED.median values" comparison below. |
+| `edge2.med` | 2024 `EDGE.median` | EDGE2 median score (Gumbs et al. 2023). Units: millions of years of potential evolutionary history lost. *Ginkgo biloba* has the maximum at 151.02 Myr. **Different formula from `edge.med`** (which is 2018 IUCN50). |
 | `EDGE2.rank` | 2024 `EDGE.Rank` | Global EDGE2 rank among gymnosperms (1 = highest priority under EDGE2). |
 | `threat_2024` | 2024 `RL.category` | Current IUCN Red List category used in the 2024 list. Always one of `CR`, `EN`, `VU`, `EW` (the 2024 list only includes threatened species). May differ from `threat` for species whose IUCN status changed since 2018. |
 | `distribution_code` | 2024 `Distribution.code` | ISO 3166-1 alpha-2 country code(s), comma-separated for multi-country ranges. |
 | `distribution_name` | 2024 `Distribution.name` | Full country name(s), comma-separated. |
 | `red_list_id` | 2024 `RL.ID` | Numeric IUCN Red List taxon ID. Links to https://www.iucnredlist.org/species/{red_list_id}/{version}. |
+
+> ### ⚠️ Two ED columns, two EDGE columns, and blank ≠ zero
+>
+> The deliverable preserves both the 2018 and 2024 quantities side-by-side. Do not confuse or substitute them.
+>
+> - **`ed.med` (2018) vs `ed2.med` (2024)** — same definition (Fair Proportion ED in Myr), different phylogeny. Comparing the 255 species present in both: only 1 has identical values (*Ginkgo biloba*, by coincidence — its ED is bounded by tree height); mean diff ~6 Myr, max diff 40.9 Myr.
+> - **`edge.med` (2018) vs `edge2.med` (2024)** — entirely different formulas. 2018 IUCN50: `ln(1+ED) + GE·ln(2)`, range ~0.7–4.9. 2024 EDGE2 (Gumbs et al. 2023): Myr-of-history-at-risk, range ~5–151. **Do not combine, subtract, or rank-correlate them.**
+> - **Blank ≠ zero.** For the 832 species not on the 2024 priority list, `ed2.med`, `edge2.med`, `tbl.med`, `EDGE2.rank`, `threat_2024`, `Class`, `Family`, `Order`, `common_name`, `distribution_code`, `distribution_name`, `red_list_id` are all blank because the 2024 list did not publish them. Statistical or display code must treat blank as missing — substituting zero will misrank the dataset.
+
+### ED.median values: 2018 vs 2024 (sample)
+
+| Species | `ed.med` (2018) | `ed2.med` (2024) | Identical? |
+|---|---:|---:|---|
+| *Ginkgo biloba* | 315.00 | 315.00 | yes (coincidence) |
+| *Wollemia nobilis* | 139.59 | 136.10 | no |
+| *Parasitaxus usta* | 109.34 | 101.58 | no |
+| *Araucaria angustifolia* | 67.71 | 41.54 | no |
+| *Araucaria araucana* | 67.71 | 56.13 | no |
 
 ---
 

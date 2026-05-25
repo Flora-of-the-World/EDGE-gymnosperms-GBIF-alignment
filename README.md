@@ -4,6 +4,23 @@ GBIF-backbone alignment of the EDGE gymnosperm dataset (Forest et al., 2018, *Sc
 
 This is the gymnosperm companion to [`EDGE-flowering-plants-GBIF-alignment`](https://github.com/Flora-of-the-World/EDGE-flowering-plants-GBIF-alignment). The output schema is intentionally aligned with the angiosperm release so a **single FotW import logic** can consume both clades.
 
+> ## ⚠️ Important — two ED columns, two EDGE columns, and "blank ≠ zero"
+>
+> The deliverable carries two independent ED measurements and two independent EDGE scores for every priority species. **Do not confuse them, and do not treat blank cells as zeros.**
+>
+> | Column | Source | Methodology | Populated for |
+> |---|---|---|---|
+> | `ed.med` | 2018 paper | Fair Proportion ED, 100-tree posterior | **All 1,090** species |
+> | `ed2.med` | 2024 EDGE list | Fair Proportion ED, EDGE2 phylogeny | **258 priority species only** |
+> | `edge.med` | 2018 paper | Isaac et al. 2007, IUCN50 transformation | **All 1,090** species |
+> | `edge2.med` | 2024 EDGE list | Gumbs et al. 2023, EDGE2 protocol | **258 priority species only** |
+> | `tbl.med` | 2024 EDGE list | Terminal branch length from EDGE2 model | **258 priority species only** |
+>
+> - **`ed.med` and `ed2.med` are NOT the same value.** Same metric definition, but computed on different phylogenies. For *Wollemia nobilis*: `ed.med` = 139.59 Myr (2018) vs `ed2.med` = 136.10 Myr (2024). Only 1 of 255 paired species has identical values (*Ginkgo biloba*, by coincidence).
+> - **`edge.med` and `edge2.med` use entirely different formulas.** 2018 IUCN50 (`ln(1+ED) + GE·ln(2)`) yields small values (~0.7–4.9 range). EDGE2 yields large values in units of Myr-of-history-at-risk (up to 151 for *Ginkgo*). They are not interchangeable.
+> - **Blank means "not published", not zero.** For the 832 non-priority species, `ed2.med`, `edge2.med`, `tbl.med`, `EDGE2.rank`, `threat_2024`, `common_name`, `distribution_*`, `red_list_id`, `Class`, `Family`, `Order` are all blank because they were not published in the 2024 EDGE list. Plotting or scoring code MUST treat these as missing values; substituting zero will misrank the dataset.
+> - **For display: prefer `ed2.med`/`edge2.med` for the 258 priority species** (more recent, current IUCN), and fall back to `ed.med`/`edge.med` for the other 832 with a "2018 score" caption so users know the methodology differs.
+
 ---
 
 ## What's in here
@@ -63,7 +80,7 @@ For each of the 1,090 species, queries `https://api.gbif.org/v1/species/match?ki
 python3 harmonize_gymno.py
 ```
 
-Renames 2018 columns to angio-compatible names and joins the 2024 EDGE priority list on `accepted_gbif_id`. Adds the `EDGE.List` Y/N flag (mirroring the angio `EDGE.List`) plus 8 enrichment columns from the 2024 list: `Class`, `common_name`, `tbl.med`, `edge2.med`, `EDGE2.rank`, `threat_2024`, `distribution_*`, `red_list_id`.
+Renames 2018 columns to angio-compatible names and joins the 2024 EDGE priority list on `accepted_gbif_id`. Adds the `EDGE.List` Y/N flag (mirroring the angio `EDGE.List`) plus 9 enrichment columns from the 2024 list: `Class`, `common_name`, `tbl.med`, `ed2.med`, `edge2.med`, `EDGE2.rank`, `threat_2024`, `distribution_*`, `red_list_id`.
 
 ### Column harmonization
 
@@ -130,12 +147,13 @@ The same tiering as the angio release applies. Gymno-specific additions:
 |---|---|---|
 | `edge2.med` | *"EDGE2 score: X.XX Myr"* | Preferred display for gymnosperms — units are interpretable (millions of years of evolutionary history at risk). Available only for the 258 priority species. |
 | `EDGE2.rank` | *"EDGE2 rank: #N of 1,090 gymnosperms"* | The 2024 EDGE2 rank under current methodology. Pair with `edge2.med`. |
+| `ed2.med` | *"Evolutionary Distinctiveness (EDGE2): X.XX Myr"* | The 2024-recomputed ED. Prefer over `ed.med` for priority species. |
 | `common_name` | inline subtitle | Vernacular name where available. |
 | `distribution_name` | small caption | Country range from the 2024 list. |
 | `threat_2024` | IUCN-style tag | Current IUCN category. Use this in preference to `threat` (which is the 2018 paper's snapshot) where both are present. |
 | `red_list_id` | link target | Link the threat tag to `https://www.iucnredlist.org/species/{red_list_id}/...`. |
 
-For non-priority species (the other 832 in the 1,090 list), display `EDGE.rank`, `edge.med`, `ed.med` from the 2018 paper with a small note that the EDGE2 score has not been published for this species.
+For non-priority species (the other 832 in the 1,090 list), display `EDGE.rank`, `edge.med`, `ed.med` from the 2018 paper with a small note that the EDGE2 score has not been published for this species. **Do not show "0" or "—" for blank 2024 fields**; either omit the row from the EDGE2 panel or render an explicit "Not assessed under EDGE2" placeholder.
 
 ---
 

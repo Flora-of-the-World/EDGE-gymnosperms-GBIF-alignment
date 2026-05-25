@@ -34,13 +34,17 @@ Columns preserved from 2018 with non-angio names (no angio equivalent):
   ED.SD, ED.rank (= Rank ED), EDGE.ISAAC, EDGE.ISAAC.rank
 
 Columns added from the 2024 EDGE list (populated only for the 258 priority
-species; blank for the other 832):
+species; BLANK for the other 832 — never interpret blank as zero):
   EDGE.List           — "y"/"n"; mirrors angio's EDGE.List
   Family, Order       — taxonomic placement (2018 paper omitted these)
   Class               — gymnosperm class (e.g., PINOPSIDA)
   common_name         — vernacular name
   tbl.med             — terminal branch length (median, Myr) from EDGE2 model
-  edge2.med           — EDGE2 median score (Gumbs et al. 2023 methodology)
+  ed2.med             — ED median (Myr) re-computed under EDGE2 methodology
+                        (Gumbs et al. 2023). NOT identical to ed.med — same
+                        metric definition, different phylogeny.
+  edge2.med           — EDGE2 median score (Gumbs et al. 2023 methodology).
+                        Different metric from edge.med (which is 2018 IUCN50).
   EDGE2.rank          — global EDGE2 rank for gymnosperms
   threat_2024         — current IUCN Red List category (may differ from 2018)
   distribution_code   — ISO 3166-1 alpha-2 country code(s)
@@ -113,7 +117,7 @@ GYMNO_2018_FIELDS = [
 # Fields added from the 2024 EDGE list (priority species only)
 EDGE2024_FIELDS = [
     "Class", "common_name",
-    "edge2.med", "EDGE2.rank",
+    "ed2.med", "edge2.med", "EDGE2.rank",
     "threat_2024",
     "distribution_code", "distribution_name",
     "red_list_id",
@@ -154,6 +158,7 @@ def load_2024_lookup():
                 "Family"            : strip_q(r.get("Family", "")),
                 "common_name"       : strip_q(r.get("Common.name", "")),
                 "tbl.med"           : strip_q(r.get("TBL.median", "")),
+                "ed2.med"           : strip_q(r.get("ED.median", "")),
                 "edge2.med"         : strip_q(r.get("EDGE.median", "")),
                 "EDGE2.rank"        : strip_q(r.get("EDGE.Rank", "")),
                 "threat_2024"       : strip_q(r.get("RL.category", "")),
@@ -215,6 +220,7 @@ def harmonize_row(r2018, by_id, by_name):
         # 2024 enrichment (blank by default)
         "Class"              : "",
         "common_name"        : "",
+        "ed2.med"            : "",
         "edge2.med"          : "",
         "EDGE2.rank"         : "",
         "threat_2024"        : "",
@@ -300,6 +306,7 @@ def build_new_accepted_rows(rows_2018, by_id, by_name):
             "EDGE.ISAAC.rank"    : "",
             "Class"              : "",
             "common_name"        : "",
+            "ed2.med"            : "",
             "edge2.med"          : "",
             "EDGE2.rank"         : "",
             "threat_2024"        : "",
@@ -374,6 +381,7 @@ def build_override_rows(by_kew_full):
             "EDGE.ISAAC.rank"    : "",
             "Class"              : strip_q(src.get("Class", "")),
             "common_name"        : strip_q(src.get("Common.name", "")),
+            "ed2.med"            : strip_q(src.get("ED.median", "")),
             "edge2.med"          : strip_q(src.get("EDGE.median", "")),
             "EDGE2.rank"         : strip_q(src.get("EDGE.Rank", "")),
             "threat_2024"        : strip_q(src.get("RL.category", "")),
