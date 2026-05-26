@@ -1,37 +1,45 @@
 """
 Resolve taxonomic status of EDGE gymnosperm species against the GBIF backbone.
 
-For each species in Forest_etal_2018_EDGEgymno_tableS3.csv (Forest et al., 2018,
-Scientific Reports — https://doi.org/10.1038/s41598-018-24365-4):
+For each species in Gymnosperm_EDGE2_scores_2024.csv (Gumbs et al. 2024 EDGE2
+gymnosperm scores — 1,083 species, all with EDGE2 metrics):
   Query /v1/species/match?kingdom=Plantae&name=Genus epithet
 
 Mirrors EDGE_flowering_plants/resolve_edge_taxonomy.py so the GBIF-derived
 columns are identical and the resolved gymnosperm table can be joined with
 fotw_taxonomy_resolved.csv (and the angiosperm table) on `accepted_gbif_id`.
-All 9 source EDGE columns are preserved verbatim at the end of each row.
+
+In addition to the standard 14 GBIF-derived columns, this resolver also
+captures `family` and `order` from the GBIF response (the source EDGE file
+does not carry them).
 
 Output columns (edge_gymno_taxonomy_resolved.csv)
 -------------------------------------------------
-GBIF-derived block (identical names to fotw_taxonomy_resolved.csv /
-edge_taxonomy_resolved.csv):
-  taxonID              — Genus_epithet derived from EDGE Taxon
-  scientificName       — EDGE binomial
-  genus                — first token of Taxon
-  specificEpithet      — second token of Taxon
-  infraspecificEpithet — blank (EDGE is binomials only)
-  scientificNameID     — blank (EDGE has no source ID URL)
+GBIF-derived block (14 cols, identical names/order to fotw_taxonomy_resolved.csv
+and edge_taxonomy_resolved.csv):
+  taxonID              — Genus_epithet derived from EDGE Species
+  scientificName       — EDGE binomial (space-separated)
+  genus                — first token of Species
+  specificEpithet      — second token of Species
+  infraspecificEpithet — blank
+  scientificNameID     — blank
   gbif_id              — blank (discovered via match)
   lookup_method        — always "name_match"
   gbif_status          — ACCEPTED | SYNONYM | DOUBTFUL | NO_MATCH | ERROR
   gbif_confidence      — confidence score from /species/match
-  accepted_name        — accepted binomial (= scientificName if already accepted)
+  accepted_name        — accepted binomial
   accepted_gbif_id     — GBIF species key of accepted name
   accepted_gbif_url    — https://gbif.org/species/{accepted_gbif_id}
   error                — error message if any
 
-EDGE-source block (verbatim from Forest_etal_2018_EDGEgymno_tableS3.csv):
-  Taxon, IUCN categories, Median ED scores, ED SD, Rank ED,
-  EDGE ISAAC scores, EDGE IUCN50 scores, Rank EDGE ISAAC, Rank EDGE IUCN50
+Plus two columns derived from the GBIF response (kept here so downstream
+joins have higher taxonomy without an extra lookup):
+  gbif_family          — family per GBIF backbone
+  gbif_order           — order per GBIF backbone
+
+EDGE-source block (verbatim from Gymnosperm_EDGE2_scores_2024.csv):
+  Species, RL.cat, TBL.median, ED.median, EDGE.median,
+  no.above.median, EDGE.species
 
 Usage
 -----
@@ -56,7 +64,7 @@ csv.field_size_limit(sys.maxsize)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE     = os.path.dirname(os.path.abspath(__file__))
-EDGE_CSV = os.path.join(BASE, "Forest_etal_2018_EDGEgymno_tableS3.csv")
+EDGE_CSV = os.path.join(BASE, "Gymnosperm_EDGE2_scores_2024.csv")
 OUT_CSV  = os.path.join(BASE, "edge_gymno_taxonomy_resolved.csv")
 
 GBIF_MATCH_URL = (
@@ -72,25 +80,22 @@ HEADERS = {
     "Accept": "application/json",
 }
 
-# GBIF-derived columns — names identical to fotw_taxonomy_resolved.csv
 GBIF_FIELDS = [
     "taxonID", "scientificName", "genus", "specificEpithet",
     "infraspecificEpithet", "scientificNameID", "gbif_id",
     "lookup_method", "gbif_status", "gbif_confidence",
     "accepted_name", "accepted_gbif_id", "accepted_gbif_url", "error",
+    "gbif_family", "gbif_order",
 ]
 
-# All 9 source EDGE columns from Forest et al. 2018 Table S3
 EDGE_FIELDS = [
-    "Taxon", "IUCN categories", "Median ED scores", "ED SD", "Rank ED",
-    "EDGE ISAAC scores", "EDGE IUCN50 scores",
-    "Rank EDGE ISAAC", "Rank EDGE IUCN50",
+    "Species", "RL.cat", "TBL.median", "ED.median", "EDGE.median",
+    "no.above.median", "EDGE.species",
 ]
 
 OUT_FIELDS = GBIF_FIELDS + EDGE_FIELDS
 
 
-# ── GBIF lookup ───────────────────────────────────────────────────────────────
 def fetch_url(url):
     req = Request(url, headers=HEADERS)
     with urlopen(req, timeout=20) as resp:
@@ -100,16 +105,17 @@ def fetch_url(url):
 def resolve_by_name(name):
     """
     Name-match via /v1/species/match.
-    Returns (gbif_status, gbif_confidence, accepted_name, accepted_gbif_id, error).
+    Returns (gbif_status, gbif_confidence, accepted_name, accepted_gbif_id,
+             family, order, error).
     """
     url = GBIF_MATCH_URL.format(name=name.replace(" ", "%20"))
     try:
         data = fetch_url(url)
     except (HTTPError, URLError, Exception) as exc:
-        return "ERROR", "", "", "", str(exc)
+        return "ERROR", "", "", "", "", "", str(exc)
 
     if data.get("matchType") == "NONE":
-        return "NO_MATCH", "0", "", "", ""
+        return "NO_MATCH", "0", "", "", "", "", ""
 
     status     = data.get("status", "").upper()
     confidence = str(data.get("confidence", ""))
@@ -120,16 +126,14 @@ def resolve_by_name(name):
     accepted_name = f"{parts[0]} {parts[1]}" if len(parts) >= 2 else species_full
 
     accepted_key = str(data.get("acceptedUsageKey", "")) or usage_key
-    return status, confidence, accepted_name, accepted_key, ""
+    family = data.get("family", "") or ""
+    order  = data.get("order", "") or ""
+    return status, confidence, accepted_name, accepted_key, family, order, ""
 
 
-# ── Load / resume ─────────────────────────────────────────────────────────────
 def load_edge(edge_csv):
-    rows = []
     with open(edge_csv, newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            rows.append(row)
-    return rows
+        return list(csv.DictReader(fh))
 
 
 def load_done(out_csv):
@@ -145,17 +149,16 @@ def strip_q(s):
     return s.strip().strip('"') if s else ""
 
 
-# ── Worker ────────────────────────────────────────────────────────────────────
 def resolve_one(row, delay):
     time.sleep(delay)
 
-    sci_name   = strip_q(row.get("Taxon", ""))         # Genus epithet
-    edge_key   = sci_name.replace(" ", "_")            # Genus_epithet
-    parts      = sci_name.split()
-    genus      = parts[0] if parts else ""
-    epithet    = parts[1] if len(parts) >= 2 else ""
+    sci_name = strip_q(row.get("Species", ""))
+    edge_key = sci_name.replace(" ", "_")
+    parts    = sci_name.split()
+    genus    = parts[0] if parts else ""
+    epithet  = parts[1] if len(parts) >= 2 else ""
 
-    status, conf, acc_name, acc_id, err = resolve_by_name(sci_name)
+    status, conf, acc_name, acc_id, family, order, err = resolve_by_name(sci_name)
     acc_url = f"https://gbif.org/species/{acc_id}" if acc_id else ""
 
     out = {
@@ -173,13 +176,14 @@ def resolve_one(row, delay):
         "accepted_gbif_id"    : acc_id,
         "accepted_gbif_url"   : acc_url,
         "error"               : err,
+        "gbif_family"         : family,
+        "gbif_order"          : order,
     }
     for col in EDGE_FIELDS:
         out[col] = strip_q(row.get(col, ""))
     return out
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -190,8 +194,7 @@ def main():
     parser.add_argument("--delay", type=float, default=0.3,
                         help="Pause per worker between requests (default: 0.3s)")
     parser.add_argument("--min-conf", type=int, default=80,
-                        help="Min confidence to count as a 'good' name match "
-                             "(default: 80; low-conf hits are flagged but still written)")
+                        help="Min confidence to count as a 'good' name match (default: 80)")
     args = parser.parse_args()
 
     print("Loading EDGE gymnosperm table …")
@@ -201,7 +204,7 @@ def main():
     print("Checking for previous run …")
     done_keys = load_done(OUT_CSV)
     todo = [r for r in rows
-            if strip_q(r.get("Taxon", "")).replace(" ", "_") not in done_keys]
+            if strip_q(r.get("Species", "")).replace(" ", "_") not in done_keys]
     print(f"  Already resolved: {len(done_keys):,}  |  Remaining: {len(todo):,}")
 
     est_min = len(todo) * args.delay / max(args.workers, 1) / 60
@@ -214,9 +217,9 @@ def main():
     if is_new:
         writer.writeheader()
 
-    total    = len(todo)
-    done     = errors = synonyms = no_match = low_conf_hits = 0
-    t0       = time.time()
+    total = len(todo)
+    done = errors = synonyms = no_match = low_conf_hits = 0
+    t0 = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {pool.submit(resolve_one, row, args.delay): row for row in todo}
